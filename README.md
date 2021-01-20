@@ -159,3 +159,64 @@ $ lerna publish              # 发布自上次发布以来已经更改的包
 $ lerna publish from-git     # 显式发布在当前提交中标记的包
 $ lerna publish from-package # 显式地发布注册表中没有最新版本的包
 ```
+
+##### 第一次发布报错
+
+- **原因**
+
+第一次`leran publish`发布时会报错`lerna ERR! E402 You must sign up for private packages`，原因可查看[lerna #1821](https://github.com/lerna/lerna/issues/1821#issuecomment-448473941)。
+
+- **解决方案**
+
+> 以下操作需要保证将本地修改都`git push`，并且将`npm registry`设置为 https://registry.npmjs.org/ 且已经登录后。
+
+1. 由于`npm`限制，需要先在`package.json`中做如下设置
+```json
+"publishConfig": {
+  "access": "public"
+},
+```
+
+2. 然后前往各个子包先通过`npm publish`发布一次
+
+```shell
+$ cd packages/create-react-app && npm publish --access=public
+```
+
+3. 修改代码后下一次发布再使用`lerna publish`，可得到如下日志
+
+```shell
+$ lerna publish
+  Patch (0.0.1) # 选择此项并回车
+  Minor (0.1.0) 
+  Major (1.0.0) 
+  Prepatch (0.0.1-alpha.0) 
+  Preminor (0.1.0-alpha.0) 
+  Premajor (1.0.0-alpha.0) 
+  Custom Prerelease 
+  Custom Version
+
+? Select a new version (currently 0.0.0) Patch (0.0.1)
+
+Changes:
+ - @careteen/cra-template: 0.0.1 => 0.0.1
+ - @careteen/create-react-app: 0.0.1 => 0.0.1
+ - @careteen/react-scripts: 0.0.1 => 0.0.1  
+? Are you sure you want to publish these packages? (ynH) # 输入y并回车
+
+Successfully published: # 发布成功
+ - @careteen/cra-template@0.0.2
+ - @careteen/create-react-app@0.0.2
+ - @careteen/react-scripts@0.0.2
+lerna success published 3 packages
+```
+
+如果此过程又失败并报错`lerna ERR! fatal: tag 'v0.0.1' already exists`，对应issues可查看[lerna #1894](https://github.com/lerna/lerna/issues/1894)。需要先将本地和远程`tag`删除，再发布。
+```shell
+# 删除本地tag
+git tag -d v0.0.1
+# 删除远程tag
+git push origin :refs/tags/v0.0.1
+# 重新发布
+lerna publish
+```
