@@ -1,14 +1,35 @@
 # Create React App 源码揭秘
 
+TODO: add cover
+FIXME: 图片资源移步图床
+
 ## 目录
 
-- monorepo管理
+- [背景](#背景)
+- [monorepo管理](#monorepo管理)
+  - [monorepo优势](#monorepo优势)
+  - [monorepo劣势](#monorepo劣势)
+- [Lerna](#Lerna)
+  - [全局安装Lerna](#全局安装Lerna)
+  - [初始化项目](#初始化项目)
+  - [创建Package](#创建Package)
+  - [开启Workspace](#开启Workspace)
+  - [LernaScript](#LernaScript)
+- [CreateReactApp架构](#CreateReactApp架构)
 - create-react-app
 - cra-template
 - cra-template--typescript
 - react-scripts
 - react-dev-utils
 
+
+## 背景
+
+[Create React App](https://github.com/facebook/create-react-app)是一个官方支持的创建`React`单页应用程序的脚手架。它提供了一个零配置的现代化配置设置。
+
+平时工作中一部分项目使用的`React`，使用之余也需要了解其脚手架实现原理。
+
+> 之前做的模板项目脚手架[@careteen/cli](https://github.com/careteenL/cli)，实现方式比较原始。后续准备通过`lerna`进行重构。
 ## monorepo管理
 
 `Monorepo`是管理项目代码的一个方式，指在一个项目仓库(`repo`)中管理多个模块/包(`package`)。不同于常见的每个模块都需要建一个`repo`。
@@ -17,7 +38,7 @@
 
 ![babel-packages](./assets/babel-packages.jpg)
 
-### monorepo管理优势
+### monorepo优势
 
 `Monorepo`最主要的好处是**统一的工作流**和**代码共享**。
 
@@ -29,7 +50,7 @@ import { buildExternalHelpers } from "@babel/core";
 
 目前大多数开源库都使用`Monorepo`进行管理，如[react](https://github.com/facebook/react)、[vue-next](https://github.com/vuejs/vue-next)、[create-react-app](https://github.com/facebook/create-react-app)。
 
-### monorepo管理劣势
+### monorepo劣势
 
 - 体积庞大。`babel`仓库下存放了所有相关代码，`clone`到本地也需要耗费不少时间。
 - 不适合用于公司项目。各个业务线仓库代码基本都是独立的，如果堆放到一起，理解和维护成本将会相当大。
@@ -38,10 +59,9 @@ import { buildExternalHelpers } from "@babel/core";
 
 `Lerna`是`babel`团队对`Monorepo`的最佳实践。是一个管理多个`npm`模块的工具，有优化维护多个包的工作流，解决多个包互相依赖，且发布需要手动维护多个包的问题。
 
-## Lerna使用
 
 > 前往[lerna](https://github.com/lerna/lerna)查看官方文档，下面做一个简易入门。
-### 全局安装lerna
+### 全局安装Lerna
 ```shell
 $ npm i -g lerna
 ```
@@ -69,7 +89,7 @@ $ lerna init
 }
 ```
 
-### 创建子项目
+### 创建Package
 
 ```shell
 # 一路回车即可
@@ -81,7 +101,7 @@ $ lerna create cra-template
 
 ![lerna-create-result](./assets/lerna-create-result.jpg)
 
-### 开启workspace
+### 开启Workspace
 
 默认是`npm`，每个子`package`都有自己的`node_modules`。
 
@@ -105,9 +125,9 @@ $ lerna create cra-template
 }
 ```
 
-### lerna script
+### Lerna Script
 
-> 前往[lerna add](https://github.com/lerna/lerna/tree/main/commands/add#readme)查看详细使用
+> 前往[Lerna](https://github.com/lerna/lerna/tree/main/commands)查看各个`command`的详细使用
 
 - lerna add
 - lerna bootstrap
@@ -220,3 +240,5 @@ git push origin :refs/tags/v0.0.1
 # 重新发布
 lerna publish
 ```
+
+## CreateReactApp架构
