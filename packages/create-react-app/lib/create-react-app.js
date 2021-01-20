@@ -3,5 +3,5 @@
 module.exports = createReactApp;
 
 function createReactApp() {
-    // TODO:
+    // TODO: core logic
 }
