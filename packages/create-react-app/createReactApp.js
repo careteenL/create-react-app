@@ -34,8 +34,8 @@ const createApp = async (appName) => {
   )
   const originalDirectory = process.cwd()
   process.chdir(root)
-  console.log('originalDirectory: ', originalDirectory);
-  console.log('root: ', root);
+  console.log('originalDirectory: ', originalDirectory)
+  console.log('root: ', root)
   await run(root, appName, originalDirectory)
 }
 
