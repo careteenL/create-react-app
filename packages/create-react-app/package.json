@@ -8,14 +8,10 @@
   "author": "CareteenL <15074806497@163.com>",
   "homepage": "https://github.com/careteenL/create-react-app#readme",
   "license": "MIT",
-  "main": "lib/create-react-app.js",
-  "directories": {
-    "lib": "lib",
-    "test": "__tests__"
+  "main": "./index.js",
+  "bin": {
+    "careteen-cra": "./index.js"
   },
-  "files": [
-    "lib"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/careteenL/create-react-app.git"
@@ -25,5 +21,8 @@
   },
   "bugs": {
     "url": "https://github.com/careteenL/create-react-app/issues"
+  },
+  "dependencies": {
+    "commander": "^7.0.0"
   }
 }

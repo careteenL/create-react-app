@@ -146,6 +146,25 @@ $ lerna add <package>[@version] [--dev] [--exact] [--peer]
 # 示例
 # 为所有子`package`都安装`chalk`
 $ lerna add chalk
+# 为`create-react-app`安装`commander`
+$ lerna add commander --scope=create-react-app
+# 如果安装失败，请检查拼写是否错误或者查看子包是否有命名空间
+$ lerna list
+# 由于我的包做了命名空间，所以需要加上前缀
+$ lerna add commander --scope=@careteen/create-react-app
+```
+
+如果想要在根目录为所有子包添加统一依赖，并只在根目录下`package.josn`，可以借助`yarn`
+
+```shell
+yarn add chalk --ignore-workspace-root-check
+```
+
+还能在根目录为某个子`package`安装依赖
+
+```shell
+# 子包有命名空间需要加上
+yarn workspace create-react-app add commander
 ```
 
 #### lerna bootstrap
@@ -242,3 +261,62 @@ lerna publish
 ```
 
 ## CreateReactApp架构
+
+TODO: 架构图
+
+![structure](./assets/structure.png)
+
+## packages/create-react-app
+
+在项目根目录`package.json`文件新增如下配置
+```json
+"scripts": {
+  "create": "node ./packages/create-react-app/index.js"
+}
+```
+
+然后在`packages/create-react-app/package.json`新增如下配置
+```json
+"main": "./index.js",
+"bin": {
+  "careteen-cra": "./index.js"
+},
+```
+
+新增`packages/create-react-app/index.js`文件
+```js
+#!/user/bin/env node
+const { init } = require('./createReactApp')
+init()
+```
+
+新增`packages/create-react-app/createReactApp.js`文件
+```js
+const chalk = require('chalk')
+const { Command } = require('commander')
+const packageJson = require('./package.json')
+
+let appName;
+const init = async () => {
+  new Command(packageJson.name)
+    .version(packageJson.version)
+    .arguments('<project-directory>')
+    .usage(`${chalk.green('<project-directory>')} [options]`)
+    .action(projectName => {
+      appName = projectName
+    })
+    .parse(process.argv)
+  console.log(appName, process.argv)
+}
+module.exports = {
+  init,
+}
+```
+
+在项目根目录运行
+```shell
+# 查看包版本
+npm run create -- --version
+# 打印出`myProject`
+npm run create -- myProject
+```

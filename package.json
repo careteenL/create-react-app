@@ -1,5 +1,5 @@
 {
-  "private": false,
+  "private": true,
   "workspaces": [
     "packages/*"
   ],
@@ -8,5 +8,11 @@
   },
   "devDependencies": {
     "lerna": "^3.22.1"
+  },
+  "dependencies": {
+    "chalk": "^4.1.0"
+  },
+  "scripts": {
+    "create": "node ./packages/create-react-app/index.js"
   }
 }
