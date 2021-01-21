@@ -24,6 +24,9 @@
 - [packages/cra-template](#packages/cra-template)
 - [packages/cra-template--typescript](#packages/cra-template--typescript)
 - [packages/react-scripts](#packages/react-scripts)
+  - [react-scripts build](#react-scripts-build)
+  - [react-scripts start](#react-scripts-start)
+  - [react-scripts小结](#react-scripts小结)
 - [packages/react-dev-utils](#packages/react-dev-utils)
 
 ## 背景
@@ -464,9 +467,191 @@ npm run create -- myProject
 
 此时已经实现了`create-react-app``package`的核心功能。下面将进一步剖析`cra-tempalte, react-scripts`。
 
-## packages/react-scripts
-
-TODO: 编写
 ## packages/cra-tempalte
 
-TODO: 编写
+`cra-tempalte`可以从[cra-tempalte](https://github.com/facebook/create-react-app/blob/master/packages/cra-template/README.md)拷贝，启动一个简易`React`单页应用。
+
+> 对`React`原理感兴趣的可前往[由浅入深React的Fiber架构](https://github.com/careteenL/react/tree/master/packages/fiber)查看。
+
+## packages/cra-tempalte--typescript
+
+同上，不是本文讨论重点。
+
+## packages/react-scripts
+
+安装依赖
+
+```shell
+# `lerna`给子包装多个依赖时报警告`lerna WARN No packages found where webpack can be added.`
+lerna add webpack webpack-dev-server babel-loader babel-preset-react-app html-webpack-plugin open --scope=@careteen/react-scripts
+# 故使用`yarn`安装
+yarn workspace @careteen/react-scripts add webpack webpack-dev-server babel-loader babel-preset-react-app html-webpack-plugin open
+```
+
+为`package.json`配置
+```json
+"bin": {
+  "careteen-react-scripts": "./bin/react-scripts.js"
+},
+"scripts": {
+  "start": "node ./bin/react-scripts.js start",
+  "build": "node ./bin/react-scripts.js build"
+},
+```
+
+创建`bin/react-scripts.js`文件
+```js
+#!/usr/bin/env node
+const spawn = require('cross-spawn')
+const args = process.argv.slice(2)
+const script = args[0]
+spawn.sync(
+  process.execPath,
+  [require.resolve('../scripts/' + script)],
+  { stdio: 'inherit' }
+)
+```
+
+### react-scripts build
+
+> 对`webpack`原理感兴趣的可前往[@careteen/webpack](https://github.com/careteenL/webpack)查看简易实现。
+
+创建`scripts/build.js`文件，主要负责两件事
+
+- 拷贝模板项目的`public`目录下的所有静态资源到`build`目录下
+- 配置为`production`环境，使用`webpack(config).run()`编译打包
+
+```js
+process.env.NODE_ENV = 'production'
+const chalk = require('chalk')
+const fs = require('fs-extra')
+const webpack = require('webpack')
+const configFactory = require('../config/webpack.config')
+const paths = require('../config/paths')
+const config = configFactory('production')
+
+fs.emptyDirSync(paths.appBuild)
+copyPublicFolder()
+build()
+
+function build() {
+  const compiler = webpack(config)
+  compiler.run((err, stats) => {
+    console.log(err)
+    console.log(chalk.green('Compiled successfully.\n'))
+  })
+}
+function copyPublicFolder() {
+  fs.copySync(paths.appPublic, paths.appBuild, {
+    filter: file => file !== paths.appHtml,
+  })
+}
+```
+
+配置`config/webpack.config.js`文件
+```js
+const paths = require('./paths')
+const HtmlWebpackPlugin = require('html-webpack-plugin')
+module.exports = function (webpackEnv) {
+  const isEnvDevelopment = webpackEnv === 'development'
+  const isEnvProduction = webpackEnv === 'production'
+  return {
+    mode: isEnvProduction ? 'production' : isEnvDevelopment && 'development',
+    output: {
+      path: paths.appBuild
+    },
+    module: {
+      rules: [{
+        test: /\.(js|jsx|ts|tsx)$/,
+        include: paths.appSrc,
+        loader: require.resolve('babel-loader'),
+        options: {
+          presets: [
+            [
+              require.resolve('babel-preset-react-app')
+            ]
+          ]
+        }
+      }, ]
+    },
+    plugins: [
+      new HtmlWebpackPlugin({
+        inject: true,
+        template: paths.appHtml
+      })
+    ]
+  }
+}
+```
+
+配置`config/paths.js`文件
+```js
+const path = require('path')
+const appDirectory = process.cwd()
+const resolveApp = relativePath => path.resolve(appDirectory, relativePath)
+module.exports = {
+  appHtml: resolveApp('public/index.html'),
+  appIndexJs: resolveApp('src/index.js'),
+  appBuild: resolveApp('build'),
+  appPublic: resolveApp('public')
+}
+```
+
+`npm run build`后可查看`build`目录下会生成编译打包后的所有文件
+
+### react-scripts start
+
+创建`scripts/start.js`文件，借助`webpack`功能启服务
+```js
+process.env.NODE_ENV = 'development'
+const configFactory = require('../config/webpack.config')
+const createDevServerConfig = require('../config/webpackDevServer.config')
+const WebpackDevServer = require('webpack-dev-server')
+const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 3000
+const HOST = process.env.HOST || '0.0.0.0'
+const config = configFactory('development')
+const webpack = require('webpack')
+const chalk = require('chalk')
+const compiler = createCompiler({
+  config,
+  webpack
+})
+const serverConfig = createDevServerConfig()
+const devServer = new WebpackDevServer(compiler, serverConfig)
+devServer.listen(DEFAULT_PORT, HOST, err => {
+  if (err) {
+    return console.log(err)
+  }
+  console.log(chalk.cyan('Starting the development server...\n'))
+})
+
+function createCompiler({
+  config,
+  webpack
+}) {
+  let compiler = webpack(config)
+  return compiler
+}
+```
+创建`config\webpackDevServer.config.js`文件提供本地服务设置
+
+> 对`webpack热更新`原理感兴趣的可前往[@careteen/webpack-hmr](https://github.com/careteenL/webpack-hmr)查看简易实现。
+```js
+module.exports = function () {
+  return {
+    hot: true
+  }
+}
+```
+
+`npm run start`后可在浏览器 http://localhost:8080/ 打开查看效果
+
+### react-scripts小结
+
+上面两节实现没有源码考虑的那么完善。后面将针对源码中使用到的一些较为巧妙的第三方库和`webpack-plugin`做讲解。
+
+## packages/react-dev-utils
+
+此子`package`下存放了许多`webpack-plugin`辅助于`react-scripts/config/webpack.config.js`文件。
+
+
