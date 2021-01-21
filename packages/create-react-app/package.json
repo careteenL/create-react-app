@@ -23,6 +23,8 @@
     "url": "https://github.com/careteenL/create-react-app/issues"
   },
   "dependencies": {
-    "commander": "^7.0.0"
+    "commander": "^7.0.0",
+    "cra-template": "^1.1.1",
+    "react-scripts": "^4.0.1"
   }
 }

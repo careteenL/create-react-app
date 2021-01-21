@@ -1,7 +1,6 @@
 # Create React App 源码揭秘
 
-TODO: add cover
-FIXME: 图片资源移步图床
+![cover](https://careteenl.github.io/images/%40careteen/create-react-app/cover.jpg)
 
 ## 目录
 
@@ -16,12 +15,16 @@ FIXME: 图片资源移步图床
   - [开启Workspace](#开启Workspace)
   - [LernaScript](#LernaScript)
 - [CreateReactApp架构](#CreateReactApp架构)
-- create-react-app
-- cra-template
-- cra-template--typescript
-- react-scripts
-- react-dev-utils
-
+- [packages/create-react-app](#packages/create-react-app)
+  - [准备工作](#准备工作)
+  - [创建package.json](#创建package.json)
+  - [安装依赖项](#安装依赖项)
+  - [拷贝模板](#拷贝模板)
+  - [查看效果](#查看效果)
+- [packages/cra-template](#packages/cra-template)
+- [packages/cra-template--typescript](#packages/cra-template--typescript)
+- [packages/react-scripts](#packages/react-scripts)
+- [packages/react-dev-utils](#packages/react-dev-utils)
 
 ## 背景
 
@@ -36,7 +39,7 @@ FIXME: 图片资源移步图床
 
 [babel](https://github.com/babel/babel/tree/main/packages)的`packages`目录下存放了多个包。
 
-![babel-packages](./assets/babel-packages.jpg)
+![babel-packages](https://careteenl.github.io/images/%40careteen/create-react-app/babel-packages.jpg)
 
 ### monorepo优势
 
@@ -99,7 +102,7 @@ $ lerna create cra-template
 ```
 会在`packages/`目录下生成三个子项目
 
-![lerna-create-result](./assets/lerna-create-result.jpg)
+![lerna-create-result](https://careteenl.github.io/images/%40careteen/create-react-app/lerna-create-result.jpg)
 
 ### 开启Workspace
 
@@ -262,11 +265,13 @@ lerna publish
 
 ## CreateReactApp架构
 
-TODO: 架构图
+TODO: 优化架构图
 
-![structure](./assets/structure.png)
+![structure](https://careteenl.github.io/images/%40careteen/create-react-app/structure.png)
 
 ## packages/create-react-app
+
+### 准备工作
 
 在项目根目录`package.json`文件新增如下配置
 ```json
@@ -296,8 +301,8 @@ const chalk = require('chalk')
 const { Command } = require('commander')
 const packageJson = require('./package.json')
 
-let appName;
 const init = async () => {
+  let appName;
   new Command(packageJson.name)
     .version(packageJson.version)
     .arguments('<project-directory>')
@@ -320,3 +325,148 @@ npm run create -- --version
 # 打印出`myProject`
 npm run create -- myProject
 ```
+会打印`myProject`，`[
+  '/Users/apple/.nvm/versions/node/v14.8.0/bin/node',
+  '/Users/apple/Desktop/create-react-app/packages/create-react-app/index.js',
+  'myProject'
+]`
+
+### 创建package.json
+
+先添加依赖
+```shell
+# cross-spawn 跨平台开启子进程
+# fs-extra fs增强版
+yarn add cross-spawn fs-extra --ignore-workspace-root-check
+```
+
+在当前工作环境创建`myProject`目录，然后创建`package.json`文件写入部分配置
+```js
+const fse = require('fs-extra')
+const init = async () => {
+  // ...
+  await createApp(appName)
+}
+const createApp = async (appName) => {
+  const root = path.resolve(appName)
+  fse.ensureDirSync(appName)
+  console.log(`Creating a new React app in ${chalk.green(root)}.`)
+  const packageJson = {
+    name: appName,
+    version: '0.1.0',
+    private: true,
+  }
+  fse.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify(packageJson, null, 2)
+  )
+  const originalDirectory = process.cwd()
+  
+  console.log('originalDirectory: ', originalDirectory)
+  console.log('root: ', root)
+}
+```
+
+### 安装依赖项
+
+然后改变工作目录为新创建的`myProject`目录，确保后续为此目录安装依赖`react, react-dom, react-scripts, cra-template`
+
+```js
+const createApp = async (appName) => {
+  // ...
+  process.chdir(root)
+  await run(root, appName, originalDirectory)
+}
+const run = async (root, appName, originalDirectory) => {
+  const scriptName = 'react-scripts'
+  const templateName = 'cra-template'
+  const allDependencies = ['react', 'react-dom', scriptName, templateName]
+  console.log(
+    `Installing ${chalk.cyan('react')}, ${chalk.cyan(
+      'react-dom'
+    )}, and ${chalk.cyan(scriptName)}${
+      ` with ${chalk.cyan(templateName)}`
+    }...`
+  )
+}
+```
+
+此时我们还没有编写`react-scripts, cra-template`这两个包，先使用现有的。
+> 后面实现后可改为`@careteen/react-scripts, @careteen/cra-template`
+```shell
+lerna add react-scripts cra-template --scope=@careteen/create-react-app
+```
+
+借助`cross-spawn`开启子进程安装依赖
+```js
+const run = async (root, appName, originalDirectory) => {
+  // ...
+  await install(root, allDependencies)
+}
+const install = async (root, allDependencies) => {
+  return new Promise((resolve) => {
+    const command = 'yarnpkg'
+    const args = ['add', '--exact', ...allDependencies, '--cwd', root]
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+    })
+    child.on('close', resolve)
+  })
+}
+```
+
+### 拷贝模板
+
+核心部分在于运行`react-scripts/scripts/init.js`做模板拷贝工作。
+```js
+const run = async (root, appName, originalDirectory) => {
+  // ...
+  await install(root, allDependencies)
+  const data = [root, appName, true, originalDirectory, templateName]
+  const source = `
+  var init = require('react-scripts/scripts/init.js');
+  init.apply(null, JSON.parse(process.argv[1]));
+  `
+  await executeNodeScript(
+    {
+      cwd: process.cwd(),
+    },
+    data,
+    source,
+  )
+  console.log('Done.')
+  process.exit(0)
+}
+const executeNodeScript = async ({ cwd }, data, source) => {
+  return new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      ['-e', source, '--', JSON.stringify(data)],
+      {
+        cwd,
+        stdio: 'inherit',
+      }
+    )
+    child.on('close', resolve)
+  })
+}
+```
+> 其中`spawn(process.execPath, args, { cwd })`类似于我们直接在`terminal`中直接使用`node -e 'console.log(1 + 1)'`，可以直接运行js代码。
+
+### 查看效果
+
+运行下面脚本
+```shell
+npm run create -- myProject
+```
+可以在当前项目根目录看到`myProject`的目录结构。
+![copy-cra-result](https://careteenl.github.io/images/%40careteen/create-react-app/copy-cra-result.jpg)
+
+此时已经实现了`create-react-app``package`的核心功能。下面将进一步剖析`cra-tempalte, react-scripts`。
+
+## packages/react-scripts
+
+TODO: 编写
+## packages/cra-tempalte
+
+TODO: 编写
