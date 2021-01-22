@@ -28,6 +28,11 @@
   - [react-scripts start](#react-scripts-start)
   - [react-scripts小结](#react-scripts小结)
 - [packages/react-dev-utils](#packages/react-dev-utils)
+  - [PnpWebpackPlugin](#PnpWebpackPlugin)
+  - [ModuleScopePlugin](#ModuleScopePlugin)
+  - [InterpolateHtmlPlugin](#InterpolateHtmlPlugin)
+  - [WatchMissingNodeModulesPlugin](#WatchMissingNodeModulesPlugin)
+- [总结](#总结)
 
 ## 背景
 
@@ -36,7 +41,12 @@
 平时工作中一部分项目使用的`React`，使用之余也需要了解其脚手架实现原理。
 
 > 之前做的模板项目脚手架[@careteen/cli](https://github.com/careteenL/cli)，实现方式比较原始。后续准备通过`lerna`进行重构。
+
+下面先做一些`前备知识`了解。
+
 ## monorepo管理
+
+> 如果对`monorepo和lerna`已经比较了解，可以直接移步[CreateReactApp架构](#CreateReactApp架构)
 
 `Monorepo`是管理项目代码的一个方式，指在一个项目仓库(`repo`)中管理多个模块/包(`package`)。不同于常见的每个模块都需要建一个`repo`。
 
@@ -62,6 +72,8 @@ import { buildExternalHelpers } from "@babel/core";
 - 不适合用于公司项目。各个业务线仓库代码基本都是独立的，如果堆放到一起，理解和维护成本将会相当大。
 
 ## Lerna
+
+> 如果对`monorepo和lerna`已经比较了解，可以直接移步[CreateReactApp架构](#CreateReactApp架构)
 
 `Lerna`是`babel`团队对`Monorepo`的最佳实践。是一个管理多个`npm`模块的工具，有优化维护多个包的工作流，解决多个包互相依赖，且发布需要手动维护多个包的问题。
 
@@ -267,8 +279,6 @@ lerna publish
 ```
 
 ## CreateReactApp架构
-
-TODO: 优化架构图
 
 ![structure](https://careteenl.github.io/images/%40careteen/create-react-app/structure.png)
 
@@ -749,7 +759,7 @@ yarn run build
 # 或者使用node
 yarn node uuid.js
 ```
-![pnp](./assets/pnp.jpg)
+![pnp](https://careteenl.github.io/images/%40careteen/create-react-app//pnp.jpg)
 
 ### ModuleScopePlugin
 
@@ -860,9 +870,6 @@ class ModuleScopePlugin {
     );
   }
 }
-
-module.exports = ModuleScopePlugin;
-
 ```
 
 ### InterpolateHtmlPlugin
@@ -874,6 +881,37 @@ module.exports = ModuleScopePlugin;
 > 在包中。在这种情况下，它将是该URL的路径名。
 
 > 示例存放在[plugins-example/InterpolateHtmlPlugin](https://github.com/careteenL/create-react-app/plugins-example/InterpolateHtmlPlugin)
+
+实现思路主要是对[html-webpack-plugin/afterTemplateExecution](https://github.com/jantimon/html-webpack-plugin/blob/v4.5.1/lib/hooks.js#L45)模板执行后生成的`html`文件进行正则替换。
+
+```js
+const escapeStringRegexp = require('escape-string-regexp');
+
+class InterpolateHtmlPlugin {
+  constructor(htmlWebpackPlugin, replacements) {
+    this.htmlWebpackPlugin = htmlWebpackPlugin;
+    this.replacements = replacements;
+  }
+
+  apply(compiler) {
+    compiler.hooks.compilation.tap('InterpolateHtmlPlugin', compilation => {
+      this.htmlWebpackPlugin
+        .getHooks(compilation)
+        .afterTemplateExecution.tap('InterpolateHtmlPlugin', data => {
+          // Run HTML through a series of user-specified string replacements.
+          Object.keys(this.replacements).forEach(key => {
+            const value = this.replacements[key];
+            data.html = data.html.replace(
+              new RegExp('%' + escapeStringRegexp(key) + '%', 'g'),
+              value
+            );
+          });
+        });
+    });
+  }
+}
+```
+
 ### WatchMissingNodeModulesPlugin
 
 > 如果你需要一个缺失的模块，然后用' npm install '来安装它，你仍然需要重启开发服务器，webpack才能发现它。这个插件使发现自动，所以你不必重新启动。
@@ -881,3 +919,50 @@ module.exports = ModuleScopePlugin;
 
 > 示例存放在[plugins-example/WatchMissingNodeModulesPlugin](https://github.com/careteenL/create-react-app/plugins-example/WatchMissingNodeModulesPlugin)
 
+实现思路是在**生成资源到 output 目录之前**[emit](https://v4.webpack.docschina.org/api/compiler-hooks/#emit)钩子中借助`compilation`的`missingDependencies`和`contextDependencies.add`两个字段对丢失的依赖重新安装。
+
+```js
+class WatchMissingNodeModulesPlugin {
+  constructor(nodeModulesPath) {
+    this.nodeModulesPath = nodeModulesPath;
+  }
+
+  apply(compiler) {
+    compiler.hooks.emit.tap('WatchMissingNodeModulesPlugin', compilation => {
+      var missingDeps = Array.from(compilation.missingDependencies);
+      var nodeModulesPath = this.nodeModulesPath;
+
+      // If any missing files are expected to appear in node_modules...
+      if (missingDeps.some(file => file.includes(nodeModulesPath))) {
+        // ...tell webpack to watch node_modules recursively until they appear.
+        compilation.contextDependencies.add(nodeModulesPath);
+      }
+    });
+  }
+}
+```
+
+## 总结
+
+**使用`多个仓库`管理的优点**
+
+- 各模块管理自由度较高，可自行选择构建工具，依赖管理，单元测试等配套设施
+- 各模块仓库体积一般不会太大
+
+使用`多个仓库`管理的缺点
+
+- 仓库分散不好找，当很多时，更加困难，分支管理混乱
+- 版本更新繁琐，如果公共模块版本变化，需要对所有模块进行依赖的更新
+- `CHANGELOG`梳理异常折腾，无法很好的自动关联各个模块的变动联系，基本靠口口相传
+
+
+**使用`monorepo`管理的缺点**
+
+- 统一构建工具，对构建工具提出了更高要求，要能构建各种相关模块
+- 仓库体积会变大
+
+使用`monorepo`管理的优点
+
+- 一个仓库维护多个模块，不用到处找仓库
+- 方便版本管理和依赖管理，模块之间的引用、调试都非常方便，配合相应工具，可以一个命令搞定
+- 方便统一生成`CHANGELOG`，配合提交规范，可以在发布时自动生成`CHANGELOG`
