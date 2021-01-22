@@ -36,6 +36,8 @@
 
 ## 背景
 
+> 图片失效可前往[juejin](https://juejin.cn/post/6920473687908941831)查看。
+
 [Create React App](https://github.com/facebook/create-react-app)是一个官方支持的创建`React`单页应用程序的脚手架。它提供了一个零配置的现代化配置设置。
 
 平时工作中一部分项目使用的`React`，使用之余也需要了解其脚手架实现原理。
