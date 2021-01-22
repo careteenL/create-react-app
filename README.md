@@ -965,4 +965,4 @@ class WatchMissingNodeModulesPlugin {
 
 - 一个仓库维护多个模块，不用到处找仓库
 - 方便版本管理和依赖管理，模块之间的引用、调试都非常方便，配合相应工具，可以一个命令搞定
-- 方便统一生成`CHANGELOG`，配合提交规范，可以在发布时自动生成`CHANGELOG`
+- 方便统一生成`CHANGELOG`，配合提交规范，可以在发布时自动生成`CHANGELOG`，借助[Leran-changelog](https://github.com/lerna/lerna-changelog)
