@@ -13,7 +13,7 @@
   - [初始化项目](#初始化项目)
   - [创建Package](#创建Package)
   - [开启Workspace](#开启Workspace)
-  - [LernaScript](#LernaScript)
+  - [LernaScript](#Lerna-Script)
 - [CreateReactApp架构](#CreateReactApp架构)
 - [packages/create-react-app](#packages/create-react-app)
   - [准备工作](#准备工作)
@@ -652,6 +652,232 @@ module.exports = function () {
 
 ## packages/react-dev-utils
 
-此子`package`下存放了许多`webpack-plugin`辅助于`react-scripts/config/webpack.config.js`文件。
+此子`package`下存放了许多`webpack-plugin`辅助于[react-scripts/config/webpack.config.js](https://github.com/facebook/create-react-app/blob/v4.0.1/packages/react-scripts/config/webpack.config.js)文件。在文件中搜索`plugins`字段查看。
 
+此文先列举一些我觉得好用的`plugins`
+
+- [PnpWebpackPlugin](https://github.com/arcanis/pnp-webpack-plugin)。提供一种更加高效的模块查找机制，试图取代`node_modules`。
+- [ModuleScopePlugin](https://github.com/facebook/create-react-app/blob/v4.0.1/packages/react-dev-utils/ModuleScopePlugin.js)。阻止用户从src/(或node_modules/)外部导入文件。
+- [InterpolateHtmlPlugin](https://github.com/facebook/create-react-app/blob/v4.0.1/packages/react-dev-utils/InterpolateHtmlPlugin.js)。使得`<link rel="icon" href="%PUBLIC_URL%/favicon.ico">`中可以使用变量`%PUBLIC_URL%`。
+- [WatchMissingNodeModulesPlugin](https://github.com/facebook/create-react-app/blob/v4.0.1/packages/react-dev-utils/WatchMissingNodeModulesPlugin.js)。使得安装了新的依赖不再需要重新启动项目也能正常运行。
+```js
+return {
+  // ...
+  resolve: {
+    plugins: [
+      // 增加了对即插即用(Plug'n'Play)安装的支持，提高了安装速度，并增加了对遗忘依赖项等的保护。
+      PnpWebpackPlugin,
+      // 阻止用户从src/(或node_modules/)外部导入文件。
+      // 这经常会引起混乱，因为我们只使用babel处理src/中的文件。
+      // 为了解决这个问题，我们阻止你从src/导入文件——如果你愿意，
+      // 请将这些文件链接到node_modules/中，然后让模块解析开始。
+      // 确保源文件已经编译，因为它们不会以任何方式被处理。
+      new ModuleScopePlugin(paths.appSrc, [
+        paths.appPackageJson,
+        reactRefreshOverlayEntry,
+      ]),
+    ],
+  },
+  plugins: [
+    // ...
+    // 使一些环境变量在index.html中可用。
+    // public URL在index中以%PUBLIC_URL%的形式存在。html,例如:
+    // <link rel="icon" href="%PUBLIC_URL%/favicon.ico">
+    // 除非你指定"homepage"否则它将是一个空字符串
+    // 在包中。在这种情况下，它将是该URL的路径名。
+    new InterpolateHtmlPlugin(HtmlWebpackPlugin, env.raw),
+    // 如果你需要一个缺失的模块，然后用' npm install '来安装它，你仍然需要重启开发服务器，webpack才能发现它。这个插件使发现自动，所以你不必重新启动。
+    // 参见https://github.com/facebook/create-react-app/issues/186
+    isEnvDevelopment &&
+        new WatchMissingNodeModulesPlugin(paths.appNodeModules),
+  ]
+
+}
+```
+
+### PnpWebpackPlugin
+
+> 增加了对即插即用(Plug'n'Play)安装的支持，提高了安装速度，并增加了对遗忘依赖项等的保护。试图取代`node_modules`。
+
+先来了解下使用`node_modules`模式的机制
+
+1. 将依赖包的版本区间解析为某个具体的版本号
+1. 下载对应版本依赖的`tar` 报到本地离线镜像
+1. 将依赖从离线镜像解压到本地缓存
+1. 将依赖从缓存拷贝到当前目录的`node_modules`目录
+
+**PnP工作原理是作为上述第四步骤的替代方案**
+
+#### PnP使用
+
+> 示例存放在[plugins-example/PnpWebpackPlugin](https://github.com/careteenL/create-react-app/plugins-example/PnpWebpackPlugin)
+
+`create-react-app`已经集成了对`PnP`的支持。只需在创建项目时添加`--use-pnp`参数。
+```shell
+create-react-app myProject --use-pnp
+```
+
+在已有项目中开启可使用`yarn`提供的`--pnp`
+```shell
+yarn --pnp
+yarn add uuid
+```
+
+与此同时会自动在`package.json`中配置开启`pnp`。而且不会生成`node_modules`目录，取而代替生成`.pnp.js`文件。
+```json
+{
+  "installConfig": {
+    "pnp": true
+  }
+}
+```
+
+由于在开启了 `PnP` 的项目中不再有 node_modules 目录，所有的依赖引用都必须由 `.pnp.js` 中的 `resolver` 处理
+因此不论是执行 `script` 还是用 `node` 直接执行一个 `JS` 文件，都必须经由 `Yarn` 处理
+```json
+{
+  // 还需配置使用脚本
+  "scripts": {
+    "build": "node uuid.js"
+  }
+}
+```
+
+运行脚本查看效果
+```shell
+yarn run build
+# 或者使用node
+yarn node uuid.js
+```
+![pnp](./assets/pnp.jpg)
+
+### ModuleScopePlugin
+
+> 阻止用户从src/(或node_modules/)外部导入文件。
+> 这经常会引起混乱，因为我们只使用babel处理src/中的文件。
+> 为了解决这个问题，我们阻止你从src/导入文件——如果你愿意，
+> 请将这些文件链接到node_modules/中，然后让模块解析开始。
+> 确保源文件已经编译，因为它们不会以任何方式被处理。
+
+通过`create-react-app`生成的项目内部引用不了除`src`外的目录，不然会报错`which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.`
+
+> 通常解决方案是借助[react-app-rewired, customize-cra](https://github.com/careteenL/react/blob/master/FAQ.md)解决。
+
+那接下来看看是如何实现这个功能。
+
+> 示例存放在[plugins-example/ModuleScopePlugin](https://github.com/careteenL/create-react-app/plugins-example/ModuleScopePlugin)
+
+实现步骤主要是
+
+- 着手于[resolver.hooks.file](https://v4.webpack.docschina.org/api/resolvers/)解析器读取文件`request`时。
+- 解析的文件路径如果包含`node_modules`则放行。
+- 解析的文件路径如果包含使用此插件的传参`appSrc`则放行。
+- 解析的文件路径和`src`做`path.relative`，结果如果是以`../`开头，则认为在`src`路径之外，会抛错。
+```js
+const chalk = require('chalk');
+const path = require('path');
+const os = require('os');
+
+class ModuleScopePlugin {
+  constructor(appSrc, allowedFiles = []) {
+    this.appSrcs = Array.isArray(appSrc) ? appSrc : [appSrc];
+    this.allowedFiles = new Set(allowedFiles);
+  }
+
+  apply(resolver) {
+    const { appSrcs } = this;
+    resolver.hooks.file.tapAsync(
+      'ModuleScopePlugin',
+      (request, contextResolver, callback) => {
+        // Unknown issuer, probably webpack internals
+        if (!request.context.issuer) {
+          return callback();
+        }
+        if (
+          // If this resolves to a node_module, we don't care what happens next
+          request.descriptionFileRoot.indexOf('/node_modules/') !== -1 ||
+          request.descriptionFileRoot.indexOf('\\node_modules\\') !== -1 ||
+          // Make sure this request was manual
+          !request.__innerRequest_request
+        ) {
+          return callback();
+        }
+        // Resolve the issuer from our appSrc and make sure it's one of our files
+        // Maybe an indexOf === 0 would be better?
+        if (
+          appSrcs.every(appSrc => {
+            const relative = path.relative(appSrc, request.context.issuer);
+            // If it's not in one of our app src or a subdirectory, not our request!
+            return relative.startsWith('../') || relative.startsWith('..\\');
+          })
+        ) {
+          return callback();
+        }
+        const requestFullPath = path.resolve(
+          path.dirname(request.context.issuer),
+          request.__innerRequest_request
+        );
+        if (this.allowedFiles.has(requestFullPath)) {
+          return callback();
+        }
+        // Find path from src to the requested file
+        // Error if in a parent directory of all given appSrcs
+        if (
+          appSrcs.every(appSrc => {
+            const requestRelative = path.relative(appSrc, requestFullPath);
+            return (
+              requestRelative.startsWith('../') ||
+              requestRelative.startsWith('..\\')
+            );
+          })
+        ) {
+          const scopeError = new Error(
+            `You attempted to import ${chalk.cyan(
+              request.__innerRequest_request
+            )} which falls outside of the project ${chalk.cyan(
+              'src/'
+            )} directory. ` +
+              `Relative imports outside of ${chalk.cyan(
+                'src/'
+              )} are not supported.` +
+              os.EOL +
+              `You can either move it inside ${chalk.cyan(
+                'src/'
+              )}, or add a symlink to it from project's ${chalk.cyan(
+                'node_modules/'
+              )}.`
+          );
+          Object.defineProperty(scopeError, '__module_scope_plugin', {
+            value: true,
+            writable: false,
+            enumerable: false,
+          });
+          callback(scopeError, request);
+        } else {
+          callback();
+        }
+      }
+    );
+  }
+}
+
+module.exports = ModuleScopePlugin;
+
+```
+
+### InterpolateHtmlPlugin
+
+> 使一些环境变量在index.html中可用。
+> public URL在index中以%PUBLIC_URL%的形式存在。html,例如:
+> <link rel="icon" href="%PUBLIC_URL%/favicon.ico">
+> 除非你指定"homepage"否则它将是一个空字符串
+> 在包中。在这种情况下，它将是该URL的路径名。
+
+> 示例存放在[plugins-example/InterpolateHtmlPlugin](https://github.com/careteenL/create-react-app/plugins-example/InterpolateHtmlPlugin)
+### WatchMissingNodeModulesPlugin
+
+> 如果你需要一个缺失的模块，然后用' npm install '来安装它，你仍然需要重启开发服务器，webpack才能发现它。这个插件使发现自动，所以你不必重新启动。
+> 参见https://github.com/facebook/create-react-app/issues/186
+
+> 示例存放在[plugins-example/WatchMissingNodeModulesPlugin](https://github.com/careteenL/create-react-app/plugins-example/WatchMissingNodeModulesPlugin)
 
